@@ -123,7 +123,7 @@ export default function InternalPagination({
 }: InternalPaginationProps) {
   const baseProps = getBaseProps(rest);
   const { leftDots, leftIndex, rightIndex, rightDots } = getPaginationState(currentPageIndex, pagesCount, openEnd);
-  const [jumpToPageValue, setJumpToPageValue] = useState(currentPageIndex.toString());
+  const [jumpToPageValue, setJumpToPageValue] = useState(currentPageIndex?.toString());
   const prevLoadingRef = React.useRef(jumpToPageIsLoading);
 
   // Sync input with currentPageIndex after loading completes
