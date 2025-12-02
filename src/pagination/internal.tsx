@@ -125,6 +125,9 @@ export default function InternalPagination({
   const { leftDots, leftIndex, rightIndex, rightDots } = getPaginationState(currentPageIndex, pagesCount, openEnd);
   const [jumpToPageValue, setJumpToPageValue] = useState(currentPageIndex?.toString());
   const prevLoadingRef = React.useRef(jumpToPageIsLoading);
+  const [popoverVisible, setPopoverVisible] = useState(false);
+
+  const i18n = useInternalI18n('pagination');
 
   // Sync input with currentPageIndex after loading completes
   React.useEffect(() => {
@@ -133,8 +136,6 @@ export default function InternalPagination({
     }
     prevLoadingRef.current = jumpToPageIsLoading;
   }, [jumpToPageIsLoading, currentPageIndex]);
-
-  const i18n = useInternalI18n('pagination');
 
   const paginationLabel = ariaLabels?.paginationLabel;
   const nextPageLabel = i18n('ariaLabels.nextPageLabel', ariaLabels?.nextPageLabel) ?? defaultAriaLabels.nextPageLabel;
@@ -165,13 +166,41 @@ export default function InternalPagination({
   }
 
   function handleJumpToPageClick(requestedPageIndex: number) {
-    handlePageClick(requestedPageIndex);
-    fireNonCancelableEvent(onJumpToPageClick, {
-      requestedPageAvailable: requestedPageIndex >= 1 && (openEnd || requestedPageIndex <= pagesCount),
-      requestedPageIndex: requestedPageIndex,
-      currentPageIndex: requestedPageIndex,
-    });
+    const pageExists = requestedPageIndex >= 1 && requestedPageIndex <= pagesCount;
+
+    if (pageExists) {
+      handlePageClick(requestedPageIndex);
+      setJumpToPageValue(String(requestedPageIndex));
+    } else {
+      if (!openEnd) {
+        // Go to last page
+        handlePageClick(pagesCount);
+        setJumpToPageValue(String(pagesCount));
+      }
+
+      // Fire event so parent can set error text (which will trigger popover via useEffect)
+      fireNonCancelableEvent(onJumpToPageClick, {
+        requestedPageAvailable: pageExists,
+        requestedPageIndex: requestedPageIndex,
+        currentPageIndex: pageExists ? requestedPageIndex : pagesCount,
+      });
+    }
   }
+
+  // Show popover when error text appears
+  React.useEffect(() => {
+    console.log(jumpToPageErrorText, 'jumpToPageErrorText');
+    if (jumpToPageErrorText) {
+      // For open-end, wait until loading completes
+      // For closed, show immediately
+      if (openEnd && jumpToPageIsLoading) {
+        return;
+      }
+      setPopoverVisible(true);
+    } else {
+      setPopoverVisible(false);
+    }
+  }, [jumpToPageErrorText, jumpToPageIsLoading, openEnd]);
 
   const previousButtonDisabled = disabled || currentPageIndex === 1;
   const nextButtonDisabled = disabled || (!openEnd && (pagesCount === 0 || currentPageIndex === pagesCount));
@@ -270,10 +299,22 @@ export default function InternalPagination({
                 value={jumpToPageValue}
                 __inlineLabelText="Page"
                 onChange={(e: NonCancelableCustomEvent<BaseChangeDetail>) => setJumpToPageValue(e.detail.value)}
+                onKeyDown={e => {
+                  if (e.detail.keyCode === 13 && jumpToPageValue && Number(jumpToPageValue) !== currentPageIndex) {
+                    handleJumpToPageClick(Number(jumpToPageValue));
+                  }
+                }}
               />
             </div>
             {jumpToPageErrorText ? (
-              <InternalPopover size="medium" content={jumpToPageErrorText} position="bottom" dismissButton={false}>
+              <InternalPopover
+                size="medium"
+                visible={popoverVisible}
+                content={jumpToPageErrorText}
+                position="bottom"
+                dismissButton={true}
+                onVisibleChange={({ detail }) => setPopoverVisible(detail.visible)}
+              >
                 {renderJumpToPageButton()}
               </InternalPopover>
             ) : (
